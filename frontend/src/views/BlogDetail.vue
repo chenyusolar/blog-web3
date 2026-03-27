@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/auth'
 import { 
   Calendar, Tag, MessageCircle, Send, Share2, CornerUpRight 
 } from 'lucide-vue-next'
+import ShareModal from '../components/ShareModal.vue'
 
 interface Comment {
   id: number
@@ -62,25 +63,13 @@ const addComment = async () => {
   }
 }
 
-const forwarding = ref(false)
-const handleForward = async () => {
+const showShareModal = ref(false)
+const handleShare = () => {
   if (!auth.isLoggedIn) {
     router.push('/login')
     return
   }
-  forwarding.value = true
-  try {
-    await axios.post(`http://localhost:8888/api/v1/blogs/${route.params.id}/forward`, {}, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-    alert('转发成功！您已获得 BLOG 代币奖励。')
-    router.push('/dashboard')
-  } catch (err) {
-    console.error(err)
-    alert('转发失败')
-  } finally {
-    forwarding.value = false
-  }
+  showShareModal.value = true
 }
 
 onMounted(fetchBlog)
@@ -101,34 +90,37 @@ onMounted(fetchBlog)
       </div>
       <h1 class="text-4xl md:text-5xl font-extrabold leading-tight mb-8">{{ blog.title }}</h1>
       
-      <!-- Author & Forward Action -->
-      <div class="flex flex-col md:flex-row md:items-center gap-6 justify-between p-6 bg-slate-50 solid rounded-3xl border border-slate-100 mb-12 shadow-sm">
+      <!-- Author & Social Share Action -->
+      <div class="flex flex-col md:flex-row md:items-center gap-6 justify-between p-6 bg-slate-50/50 rounded-3xl border border-slate-100 mb-12 shadow-sm">
         <div class="flex items-center gap-4">
           <div class="w-12 h-12 rounded-full bg-indigo-50 border-2 border-white shadow-sm flex items-center justify-center font-bold text-indigo-600 text-xl">
             {{ blog.author?.username[0] }}
           </div>
           <div>
             <div class="font-bold text-slate-900 leading-tight">{{ blog.author?.username }}</div>
-            <div v-if="blog.is_forward && blog.original_blog" class="text-xs text-indigo-600 font-bold flex items-center gap-1 mt-0.5">
-              <CornerUpRight class="w-3 h-3" />
-              转发自: {{ blog.original_blog.author?.username }}
-            </div>
-            <div v-else class="text-xs text-slate-400 font-medium mt-0.5 uppercase tracking-widest italic">主创作者</div>
+            <div class="text-xs text-slate-400 font-medium mt-0.5 uppercase tracking-widest italic">主创作者</div>
           </div>
         </div>
         
         <div class="flex items-center gap-2">
           <button 
-            @click="handleForward"
-            :disabled="forwarding"
-            class="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50 hover:border-indigo-100 hover:text-indigo-600 transition-all shadow-sm disabled:opacity-50"
+            @click="handleShare"
+            class="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50 hover:border-indigo-100 hover:text-indigo-600 transition-all shadow-sm"
           >
-            <Share2 class="w-4 h-4" :class="{ 'animate-pulse': forwarding }" />
-            <span>{{ forwarding ? '处理中...' : '一键转发' }}</span>
+            <Share2 class="w-4 h-4" />
+            <span>分享并赚钱</span>
           </button>
         </div>
       </div>
     </header>
+
+    <ShareModal 
+      v-if="blog"
+      :show="showShareModal" 
+      :blog-id="blog.id" 
+      :blog-title="blog.title"
+      @close="showShareModal = false"
+    />
 
     <!-- Image -->
     <div class="relative w-full h-96 rounded-3xl overflow-hidden mb-12 shadow-2xl">

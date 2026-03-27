@@ -138,7 +138,7 @@ func main() {
 			
 			auth.POST("/blogs/generate", generateBlog)
 			auth.POST("/blogs", publishBlog)
-			auth.POST("/blogs/:id/forward", forwardBlog) // Repost
+			auth.POST("/blogs/:id/share", shareBlog) // External Social Share
 			auth.PUT("/blogs/:id", updateBlog)
 			auth.DELETE("/blogs/:id", deleteBlog)
 			auth.POST("/comments", addComment)
@@ -614,29 +614,26 @@ func getRewardLogs(ctx context.Context, c *app.RequestContext) {
 	c.JSON(http.StatusOK, logs)
 }
 
-func forwardBlog(ctx context.Context, c *app.RequestContext) {
+func shareBlog(ctx context.Context, c *app.RequestContext) {
 	userID := c.GetUint("user_id")
 	blogID := c.Param("id")
 	
-	var original Blog
-	if err := DB.First(&original, blogID).Error; err != nil {
-		c.JSON(http.StatusNotFound, utils.H{"error": "原文未找到"})
+	var blog Blog
+	if err := DB.First(&blog, blogID).Error; err != nil {
+		c.JSON(http.StatusNotFound, utils.H{"error": "文章未找到"})
 		return
 	}
 
-	newBlog := Blog{
-		Title:      "转发: " + original.Title,
-		Content:    original.Content,
-		AuthorID:   userID,
-		IsForward:  true,
-		OriginalID: &original.ID,
-		CategoryID: original.CategoryID,
-	}
+	// 增加分享计数并同步更新
+	DB.Model(&blog).Update("share_count", gorm.Expr("share_count + 1"))
 	
-	DB.Create(&newBlog)
+	// 发放分享奖励 (复用 FORWARD 奖励配置)
 	go DistributeRewards(userID, "FORWARD")
 	
-	c.JSON(http.StatusOK, newBlog)
+	c.JSON(http.StatusOK, utils.H{
+		"message": "分享成功，奖励已发放",
+		"share_count": blog.ShareCount + 1,
+	})
 }
 
 // Admin 面板逻辑

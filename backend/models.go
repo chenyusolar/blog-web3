@@ -55,6 +55,7 @@ type Blog struct {
 	Tags       []Tag          `gorm:"many2many:blog_tags;" json:"tags"` // 多对多关联
 	Status     string         `gorm:"default:'published'" json:"status"`
 	ViewCount  int            `gorm:"default:0" json:"view_count"`
+	ShareCount int            `gorm:"default:0" json:"share_count"`
 	IsForward  bool           `gorm:"default:false" json:"is_forward"`
 	OriginalID *uint          `json:"original_id"`
 	OriginalBlog *Blog        `gorm:"foreignKey:OriginalID" json:"original_blog"`

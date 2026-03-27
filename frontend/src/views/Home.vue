@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/auth'
 import { 
   FolderOpen, ArrowRight, Search, Share2, CornerUpRight 
 } from 'lucide-vue-next'
+import ShareModal from '../components/ShareModal.vue'
 
 interface Category {
   id: number
@@ -21,10 +22,7 @@ interface Blog {
   tags?: { id: number, name: string }[]
   author?: { username: string }
   created_at: string
-  is_forward: boolean
-  original_blog?: {
-    author: { username: string }
-  }
+  share_count: number
 }
 
 const blogs = ref<Blog[]>([])
@@ -33,6 +31,9 @@ const searchQuery = ref('')
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+
+const showShareModal = ref(false)
+const selectedBlog = ref<{id: number, title: string} | null>(null)
 
 const fetchBlogs = async () => {
   const categoryId = route.query.category_id
@@ -54,20 +55,13 @@ const filteredBlogs = computed(() => {
   )
 })
 
-const handleForward = async (blogId: number) => {
+const handleShare = (blog: Blog) => {
   if (!auth.isLoggedIn) {
     router.push('/login')
     return
   }
-  try {
-    await axios.post(`http://localhost:8888/api/v1/blogs/${blogId}/forward`, {}, {
-      headers: { Authorization: `Bearer ${auth.token}` }
-    })
-    alert('转发成功！')
-    fetchBlogs() // Refresh the list
-  } catch (err) {
-    alert('转发失败')
-  }
+  selectedBlog.value = { id: blog.id, title: blog.title }
+  showShareModal.value = true
 }
 
 onMounted(() => {
@@ -141,17 +135,13 @@ watch(() => route.query.category_id, fetchBlogs)
               <span class="bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-indigo-600 shadow-sm uppercase tracking-wider">
                 {{ blog.category?.name || '未分类' }}
               </span>
-              <span v-if="blog.is_forward" class="bg-indigo-600/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-white shadow-sm uppercase tracking-wider flex items-center gap-1">
-                <CornerUpRight class="w-3 h-3" />
-                转发
-              </span>
             </div>
 
-            <!-- Quick Action Forward -->
+            <!-- Quick Action Share -->
             <button 
-              @click.stop.prevent="handleForward(blog.id)"
+              @click.stop.prevent="handleShare(blog)"
               class="absolute top-4 right-4 w-9 h-9 bg-white/90 backdrop-blur rounded-full flex items-center justify-center text-slate-600 hover:bg-indigo-600 hover:text-white transition-all shadow-sm opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0"
-              title="一键转发"
+              title="分享赚钱"
             >
               <Share2 class="w-4 h-4" />
             </button>
@@ -172,12 +162,6 @@ watch(() => route.query.category_id, fetchBlogs)
               {{ blog.content }}
             </p>
 
-            <!-- Show Original Info if Forward -->
-            <div v-if="blog.is_forward && blog.original_blog" class="mb-4 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100 text-[10px] text-slate-400 font-bold flex items-center gap-2">
-               <CornerUpRight class="w-3 h-3 text-indigo-400" />
-               转发自: {{ blog.original_blog.author.username }}
-            </div>
-            
             <div class="flex items-center justify-between pt-6 border-t border-slate-50 mt-auto">
               <div class="flex items-center gap-2">
                 <div class="w-7 h-7 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-600 uppercase">
@@ -193,5 +177,14 @@ watch(() => route.query.category_id, fetchBlogs)
         </article>
       </div>
     </div>
+
+    <!-- Share Modal -->
+    <ShareModal 
+      v-if="selectedBlog"
+      :show="showShareModal"
+      :blog-id="selectedBlog.id"
+      :blog-title="selectedBlog.title"
+      @close="showShareModal = false"
+    />
   </div>
 </template>
