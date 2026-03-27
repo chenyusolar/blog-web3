@@ -57,6 +57,7 @@ type Blog struct {
 	ViewCount  int            `gorm:"default:0" json:"view_count"`
 	IsForward  bool           `gorm:"default:false" json:"is_forward"`
 	OriginalID *uint          `json:"original_id"`
+	OriginalBlog *Blog        `gorm:"foreignKey:OriginalID" json:"original_blog"`
 	CreatedAt  time.Time      `json:"created_at"`
 	UpdatedAt  time.Time      `json:"updated_at"`
 	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`

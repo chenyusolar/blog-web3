@@ -18,8 +18,10 @@ const copied = ref(false)
 
 onMounted(async () => {
   try {
-    wallet.value = await auth.fetchWallet()
-    rewards.value = await auth.fetchRewards()
+    const w = await auth.fetchWallet()
+    wallet.value = w || { address: '', balance: 0, referral_code: '' }
+    const r = await auth.fetchRewards()
+    rewards.value = Array.isArray(r) ? r : []
   } catch (err) {
     console.error(err)
   } finally {
@@ -58,15 +60,15 @@ const copyToClipboard = (text: string) => {
           <div class="relative z-10">
             <p class="text-indigo-100 font-bold mb-2 uppercase tracking-widest text-xs">BLOG Token Balance</p>
             <div class="flex items-baseline gap-3">
-              <h2 class="text-6xl font-black tabular-nums">{{ wallet.balance?.toFixed(2) || '0.00' }}</h2>
+              <h2 class="text-6xl font-black tabular-nums">{{ wallet?.balance?.toFixed(2) || '0.00' }}</h2>
               <span class="text-2xl font-bold opacity-80 uppercase">Blog</span>
             </div>
             
             <div class="mt-8 pt-8 border-t border-white/10 flex items-center justify-between">
               <div>
                 <p class="text-indigo-100 text-xs font-bold uppercase mb-1 opacity-60">Solana Wallet Address</p>
-                <div class="flex items-center gap-2 group/addr cursor-pointer" @click="copyToClipboard(wallet.address)">
-                  <span class="font-mono text-sm opacity-90 truncate max-w-[200px] sm:max-w-none">{{ wallet.address }}</span>
+                <div class="flex items-center gap-2 group/addr cursor-pointer" @click="copyToClipboard(wallet?.address || '')">
+                  <span class="font-mono text-sm opacity-90 truncate max-w-[200px] sm:max-w-none">{{ wallet?.address || '未生成' }}</span>
                   <Copy v-if="!copied" class="w-4 h-4 opacity-50 group-hover/addr:opacity-100 transition-opacity" />
                   <CheckCircle2 v-else class="w-4 h-4 text-emerald-400" />
                 </div>
@@ -89,8 +91,8 @@ const copyToClipboard = (text: string) => {
             <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
               <p class="text-xs font-bold text-slate-400 uppercase mb-1">您的邀请码</p>
               <div class="flex items-center justify-between">
-                <span class="text-xl font-black text-indigo-600 tracking-wider font-mono">{{ wallet.referral_code }}</span>
-                <button @click="copyToClipboard(wallet.referral_code)" class="text-slate-400 hover:text-indigo-600 transition">
+                <span class="text-xl font-black text-indigo-600 tracking-wider font-mono">{{ wallet?.referral_code || '---' }}</span>
+                <button @click="copyToClipboard(wallet?.referral_code || '')" class="text-slate-400 hover:text-indigo-600 transition">
                   <Copy class="w-5 h-5" />
                 </button>
               </div>

@@ -1,5 +1,22 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 body {
   @apply bg-slate-50 text-slate-900;
+}
+
+.prose table {
+  @apply w-full border-collapse border border-slate-200 my-8 rounded-xl overflow-hidden;
+}
+
+.prose th, .prose td {
+  @apply border border-slate-200 p-4 text-left;
+}
+
+.prose th {
+  @apply bg-slate-50 font-bold text-slate-700;
+}
+
+.prose tr:nth-child(even) {
+  @apply bg-slate-50/30;
 }

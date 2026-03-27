@@ -3,21 +3,28 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { 
   FileText, Trash2, Eye, Plus, Search, 
-  Calendar, ExternalLink, AlertCircle, Sparkles
+  Calendar, ExternalLink, AlertCircle, Sparkles,
+  Edit, ShieldCheck
 } from 'lucide-vue-next'
+import { useAuthStore } from '../stores/auth'
 import axios from 'axios'
 
 const router = useRouter()
+const auth = useAuthStore()
 const blogs = ref<any[]>([])
 const loading = ref(true)
 const searchQuery = ref('')
+const isAdminView = ref(false)
 const message = ref({ type: '', text: '' })
 
 const fetchMyBlogs = async () => {
   loading.value = true
   try {
-    const res = await axios.get('http://localhost:8888/api/v1/user/blogs')
-    blogs.value = res.data
+    const url = isAdminView.value 
+      ? 'http://localhost:8888/api/v1/user/blogs?all=true' 
+      : 'http://localhost:8888/api/v1/user/blogs'
+    const res = await axios.get(url)
+    blogs.value = Array.isArray(res.data) ? res.data : []
   } catch (err) {
     message.value = { type: 'error', text: '加载文章失败' }
   } finally {
@@ -49,11 +56,16 @@ onMounted(fetchMyBlogs)
 
 // Filtered blogs based on search query
 const filteredBlogs = () => {
+  if (!blogs.value || !Array.isArray(blogs.value)) return []
   if (!searchQuery.value) return blogs.value
   return blogs.value.filter(b => 
-    b.title.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-    b.category?.name.toLowerCase().includes(searchQuery.value.toLowerCase())
+    b.title?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+    b.category?.name?.toLowerCase().includes(searchQuery.value.toLowerCase())
   )
+}
+const toggleAdminView = () => {
+  isAdminView.value = !isAdminView.value
+  fetchMyBlogs()
 }
 </script>
 
@@ -64,9 +76,11 @@ const filteredBlogs = () => {
       <div>
         <h1 class="text-3xl font-bold text-slate-900 flex items-center gap-3">
           <Sparkles class="w-8 h-8 text-indigo-600" />
-          文章管理
+          {{ isAdminView ? '全站文章管理' : '我的文章管理' }}
         </h1>
-        <p class="text-slate-500 mt-1">管理您发布的所有内容，查看数据并持续创作</p>
+        <p class="text-slate-500 mt-1">
+          {{ isAdminView ? '监控全站内容，确保社区质量' : '管理您发布的所有内容，查看数据并持续创作' }}
+        </p>
       </div>
       <router-link to="/editor" class="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-indigo-700 transition shadow-lg shadow-indigo-100 transform hover:-translate-y-1">
         <Plus class="w-5 h-5" />
@@ -81,7 +95,7 @@ const filteredBlogs = () => {
           <FileText class="w-6 h-6" />
         </div>
         <div>
-          <div class="text-2xl font-bold text-slate-900">{{ blogs.length }}</div>
+          <div class="text-2xl font-bold text-slate-900">{{ blogs?.length || 0 }}</div>
           <div class="text-sm text-slate-500 font-medium">文章总数</div>
         </div>
       </div>
@@ -91,7 +105,7 @@ const filteredBlogs = () => {
         </div>
         <div>
           <div class="text-2xl font-bold text-slate-900">
-            {{ blogs.reduce((acc, b) => acc + (b.view_count || 0), 0) }}
+            {{ blogs?.reduce((acc, b) => acc + (b.view_count || 0), 0) || 0 }}
           </div>
           <div class="text-sm text-slate-500 font-medium">总浏览量</div>
         </div>
@@ -102,16 +116,15 @@ const filteredBlogs = () => {
         </div>
         <div>
           <div class="text-2xl font-bold text-slate-900">
-            {{ blogs.length > 0 ? formatDate(blogs[0].created_at) : '暂无数据' }}
+            {{ blogs?.length > 0 ? formatDate(blogs[0].created_at) : '暂无数据' }}
           </div>
           <div class="text-sm text-slate-500 font-medium">最近发布</div>
         </div>
       </div>
     </div>
 
-    <!-- Search & Filters -->
-    <div class="mb-6 flex items-center gap-4">
-      <div class="relative flex-grow">
+    <div class="mb-6 flex flex-col md:flex-row items-center gap-4">
+      <div class="relative flex-grow w-full">
         <Search class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
         <input 
           v-model="searchQuery"
@@ -120,6 +133,19 @@ const filteredBlogs = () => {
           class="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 transition outline-none text-slate-700 font-medium shadow-sm"
         />
       </div>
+      
+      <!-- Admin Toggle -->
+      <button 
+        v-if="auth.user?.role === 'admin'"
+        @click="toggleAdminView"
+        :class="[
+          'px-6 py-3 rounded-2xl font-bold flex items-center gap-2 transition shadow-sm whitespace-nowrap',
+          isAdminView ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+        ]"
+      >
+        <ShieldCheck class="w-5 h-5" />
+        {{ isAdminView ? '退出管理模式' : '进入管理模式' }}
+      </button>
     </div>
 
     <!-- Message Alert -->
@@ -141,7 +167,7 @@ const filteredBlogs = () => {
         <p class="text-slate-500 font-medium">正在获取您的创作...</p>
       </div>
 
-      <div v-else-if="blogs.length === 0" class="p-20 text-center">
+      <div v-else-if="!blogs || blogs.length === 0" class="p-20 text-center">
         <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
           <FileText class="w-10 h-10 text-slate-300" />
         </div>
@@ -171,7 +197,12 @@ const filteredBlogs = () => {
                   </div>
                   <div>
                     <h4 class="font-bold text-slate-900 group-hover:text-indigo-600 transition line-clamp-1">{{ blog.title }}</h4>
-                    <p class="text-xs text-slate-400 mt-1">ID: #{{ blog.id }}</p>
+                    <div class="flex items-center gap-2 mt-1">
+                      <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">#{{ blog.id }}</p>
+                      <span v-if="blog.is_forward" class="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-bold border border-indigo-100 flex items-center gap-1">
+                        <CornerUpRight class="w-2.5 h-2.5" /> 转发内容
+                      </span>
+                    </div>
                   </div>
                 </div>
               </td>
@@ -201,7 +232,14 @@ const filteredBlogs = () => {
                     class="p-2 text-slate-400 hover:text-indigo-600 transition hover:bg-white hover:shadow-sm rounded-lg"
                     title="查看"
                   >
-                    <ExternalLink class="w-5 h-5" />
+                    <Eye class="w-5 h-5" />
+                  </button>
+                  <button 
+                    @click="router.push(`/editor?id=${blog.id}`)"
+                    class="p-2 text-slate-400 hover:text-amber-600 transition hover:bg-white hover:shadow-sm rounded-lg"
+                    title="编辑"
+                  >
+                    <Edit class="w-5 h-5" />
                   </button>
                   <button 
                     @click="deleteBlog(blog.id)"

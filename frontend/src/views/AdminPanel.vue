@@ -25,9 +25,9 @@ onMounted(async () => {
       axios.get('http://localhost:8888/api/v1/admin/users'),
       axios.get('http://localhost:8888/api/v1/admin/config')
     ])
-    stats.value = statsRes.data
-    users.value = usersRes.data
-    config.value = configRes.data
+    stats.value = statsRes.data || { user_count: 0, blog_count: 0, comment_count: 0, total_issued: 0 }
+    users.value = Array.isArray(usersRes.data) ? usersRes.data : []
+    config.value = configRes.data || {}
   } catch (err) {
     console.error(err)
   } finally {
@@ -72,19 +72,19 @@ const updateConfig = async () => {
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
         <div class="bg-white p-8 rounded-[32px] border border-slate-100 shadow-xl shadow-slate-200/50">
           <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">总用户数</p>
-          <h4 class="text-4xl font-black text-slate-900">{{ stats.user_count }}</h4>
+          <h4 class="text-4xl font-black text-slate-900">{{ stats?.user_count || 0 }}</h4>
         </div>
         <div class="bg-white p-8 rounded-[32px] border border-slate-100 shadow-xl shadow-slate-200/50">
           <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">文章总数</p>
-          <h4 class="text-4xl font-black text-slate-900">{{ stats.blog_count }}</h4>
+          <h4 class="text-4xl font-black text-slate-900">{{ stats?.blog_count || 0 }}</h4>
         </div>
         <div class="bg-white p-8 rounded-[32px] border border-slate-100 shadow-xl shadow-slate-200/50">
           <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">评论总数</p>
-          <h4 class="text-4xl font-black text-slate-900">{{ stats.comment_count }}</h4>
+          <h4 class="text-4xl font-black text-slate-900">{{ stats?.comment_count || 0 }}</h4>
         </div>
         <div class="bg-white p-8 rounded-[32px] border border-slate-100 shadow-xl shadow-slate-200/50 bg-indigo-50 border-indigo-100">
           <p class="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-2">代币总发放</p>
-          <h4 class="text-4xl font-black text-indigo-600">{{ stats.total_issued?.toFixed(2) }}</h4>
+          <h4 class="text-4xl font-black text-indigo-600">{{ stats?.total_issued?.toFixed(2) || '0.00' }}</h4>
         </div>
       </div>
 

@@ -45,7 +45,7 @@ func initDB() {
 	}
 
 	// 自动迁移所有模型
-	DB.AutoMigrate(&User{}, &Blog{}, &Comment{}, &Media{}, &Category{}, &Tag{})
+	DB.AutoMigrate(&User{}, &Blog{}, &Comment{}, &Media{}, &Category{}, &Tag{}, &RewardLog{})
 	
 	// 为存量数据补全邀请码和钱包
 	backfillUserData()
@@ -76,16 +76,26 @@ func AuthMiddleware() app.HandlerFunc {
 			return
 		}
 
-		token, _ := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+		// Handle "Bearer <token>" format
+		if len(tokenStr) > 7 && tokenStr[:7] == "Bearer " {
+			tokenStr = tokenStr[7:]
+		}
+
+		token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
 			return JWT_SECRET, nil
 		})
 
-		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		if err != nil || token == nil || !token.Valid {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, utils.H{"error": "Invalid or expired token"})
+			return
+		}
+
+		if claims, ok := token.Claims.(jwt.MapClaims); ok {
 			userID := uint(claims["user_id"].(float64))
 			c.Set("user_id", userID)
 			c.Next(ctx)
 		} else {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, utils.H{"error": "Invalid Token"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, utils.H{"error": "Invalid token claims"})
 		}
 	}
 }
@@ -251,7 +261,7 @@ func login(ctx context.Context, c *app.RequestContext) {
 
 // 博客管理逻辑
 func listBlogs(ctx context.Context, c *app.RequestContext) {
-	var blogs []Blog
+	blogs := []Blog{}
 	query := DB.Preload("Author").Preload("Category").Preload("Tags")
 	
 	// 支持按分类过滤
@@ -259,14 +269,14 @@ func listBlogs(ctx context.Context, c *app.RequestContext) {
 		query = query.Where("category_id = ?", catID)
 	}
 
-	query.Order("created_at desc").Find(&blogs)
+	query.Preload("OriginalBlog").Preload("OriginalBlog.Author").Order("created_at desc").Find(&blogs)
 	c.JSON(http.StatusOK, blogs)
 }
 
 func getBlogDetail(ctx context.Context, c *app.RequestContext) {
 	id := c.Param("id")
 	var blog Blog
-	if err := DB.Preload("Author").Preload("Category").Preload("Tags").First(&blog, id).Error; err != nil {
+	if err := DB.Preload("Author").Preload("Category").Preload("Tags").Preload("OriginalBlog").Preload("OriginalBlog.Author").First(&blog, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, utils.H{"error": "博文未找到"})
 		return
 	}
@@ -323,7 +333,7 @@ func publishBlog(ctx context.Context, c *app.RequestContext) {
 
 // 分类与标签管理接口实现
 func listCategories(ctx context.Context, c *app.RequestContext) {
-	var cats []Category
+	cats := []Category{}
 	DB.Find(&cats)
 	c.JSON(http.StatusOK, cats)
 }
@@ -336,7 +346,7 @@ func createCategory(ctx context.Context, c *app.RequestContext) {
 }
 
 func listTags(ctx context.Context, c *app.RequestContext) {
-	var tags []Tag
+	tags := []Tag{}
 	DB.Find(&tags)
 	c.JSON(http.StatusOK, tags)
 }
@@ -401,20 +411,63 @@ func generateBlog(ctx context.Context, c *app.RequestContext) {
 func updateBlog(ctx context.Context, c *app.RequestContext) {
 	id := c.Param("id")
 	userID := c.GetUint("user_id")
+	
+	var currentUser User
+	DB.First(&currentUser, userID)
+
 	var blog Blog
-	DB.First(&blog, id)
-	if blog.AuthorID != userID {
+	if err := DB.First(&blog, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, utils.H{"error": "文章未找到"})
+		return
+	}
+
+	if blog.AuthorID != userID && currentUser.Role != "admin" {
 		c.JSON(http.StatusForbidden, utils.H{"error": "无权编辑他人文章"})
 		return
 	}
-	c.BindAndValidate(&blog)
-	DB.Save(&blog)
+
+	var req Blog
+	if err := c.BindAndValidate(&req); err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "无效参数"})
+		return
+	}
+
+	// 只更新部分字段，避免覆盖 ID 或 AuthorID
+	DB.Model(&blog).Updates(map[string]interface{}{
+		"title":       req.Title,
+		"content":     req.Content,
+		"image_url":   req.ImageURL,
+		"video_url":   req.VideoURL,
+		"category_id": req.CategoryID,
+	})
+	
+	// 处理标签更新 (多对多)
+	if len(req.Tags) > 0 {
+		DB.Model(&blog).Association("Tags").Replace(req.Tags)
+	}
+
 	c.JSON(http.StatusOK, blog)
 }
 
 func deleteBlog(ctx context.Context, c *app.RequestContext) {
 	id := c.Param("id")
-	DB.Delete(&Blog{}, id)
+	userID := c.GetUint("user_id")
+
+	var currentUser User
+	DB.First(&currentUser, userID)
+
+	var blog Blog
+	if err := DB.First(&blog, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, utils.H{"error": "文章未找到"})
+		return
+	}
+
+	if blog.AuthorID != userID && currentUser.Role != "admin" {
+		c.JSON(http.StatusForbidden, utils.H{"error": "无权删除他人文章"})
+		return
+	}
+
+	DB.Delete(&blog)
 	c.JSON(http.StatusOK, utils.H{"message": "删除成功"})
 }
 
@@ -426,7 +479,7 @@ func addComment(ctx context.Context, c *app.RequestContext) {
 	comment.UserID = userID
 	DB.Create(&comment)
 	
-	// 发放奖励
+	// 发放评论奖励
 	go DistributeRewards(userID, "COMMENT")
 	
 	c.JSON(http.StatusOK, comment)
@@ -527,8 +580,19 @@ func changePassword(ctx context.Context, c *app.RequestContext) {
 
 func getUserBlogs(ctx context.Context, c *app.RequestContext) {
 	userID := c.GetUint("user_id")
+	all := c.Query("all") == "true"
+
+	var currentUser User
+	DB.First(&currentUser, userID)
+
 	blogs := []Blog{}
-	DB.Preload("Category").Preload("Tags").Where("author_id = ?", userID).Order("created_at desc").Find(&blogs)
+	query := DB.Preload("Category").Preload("Tags").Preload("OriginalBlog").Preload("OriginalBlog.Author").Order("created_at desc")
+
+	if all && currentUser.Role == "admin" {
+		query.Find(&blogs)
+	} else {
+		query.Where("author_id = ?", userID).Find(&blogs)
+	}
 	c.JSON(http.StatusOK, blogs)
 }
 
@@ -545,7 +609,7 @@ func getWalletInfo(ctx context.Context, c *app.RequestContext) {
 
 func getRewardLogs(ctx context.Context, c *app.RequestContext) {
 	userID := c.GetUint("user_id")
-	var logs []RewardLog
+	logs := []RewardLog{}
 	DB.Where("user_id = ?", userID).Order("created_at desc").Find(&logs)
 	c.JSON(http.StatusOK, logs)
 }
@@ -585,7 +649,7 @@ func adminGetUsers(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	var users []User
+	users := []User{}
 	DB.Find(&users)
 	c.JSON(http.StatusOK, users)
 }
