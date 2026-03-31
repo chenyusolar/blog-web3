@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useAuthStore } from './stores/auth'
 import { useRouter } from 'vue-router'
-import { Sparkles, User, LogOut, PenLine, Home, FileText, Wallet, ShieldCheck } from 'lucide-vue-next'
+import { Sparkles, User, LogOut, PenLine, Home, FileText, Wallet, ShieldCheck, Trophy } from 'lucide-vue-next'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -25,6 +25,9 @@ const logout = () => {
         <div class="flex items-center gap-6">
           <router-link to="/" class="text-slate-600 hover:text-indigo-600 flex items-center gap-1 font-medium transition">
             <Home class="w-4 h-4" /> 首页
+          </router-link>
+          <router-link to="/leaderboard" class="text-slate-600 hover:text-indigo-600 flex items-center gap-1 font-medium transition">
+            <Trophy class="w-4 h-4" /> 排行榜
           </router-link>
           
           <template v-if="auth.isLoggedIn">

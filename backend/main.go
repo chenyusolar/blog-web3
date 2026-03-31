@@ -30,6 +30,7 @@ var (
 )
 
 const BLOG_CACHE_KEY = "aigen_blog_list"
+
 var JWT_SECRET = []byte("aigen_blog_secret_key")
 
 func initDB() {
@@ -46,7 +47,7 @@ func initDB() {
 
 	// 自动迁移所有模型
 	DB.AutoMigrate(&User{}, &Blog{}, &Comment{}, &Media{}, &Category{}, &Tag{}, &RewardLog{})
-	
+
 	// 为存量数据补全邀请码和钱包
 	backfillUserData()
 
@@ -62,7 +63,7 @@ func initDB() {
 		os.Getenv("AI_BASE_URL"),
 		os.Getenv("AI_MODEL"),
 	)
-	
+
 	// 创建上传目录
 	os.MkdirAll("uploads", os.ModePerm)
 }
@@ -124,9 +125,10 @@ func main() {
 			auth.PUT("/user/profile", updateUserProfile)
 			auth.PUT("/user/password", changePassword)
 			auth.GET("/user/blogs", getUserBlogs)
-			auth.GET("/user/wallet", getWalletInfo)   // Web3 Wallet
+			auth.GET("/user/wallet", getWalletInfo)  // Web3 Wallet
 			auth.GET("/user/rewards", getRewardLogs) // Reward History
-			
+			auth.GET("/leaderboard", getLeaderboard) // Token Leaderboard
+
 			// Admin Routes
 			admin := auth.Group("/admin")
 			{
@@ -135,7 +137,7 @@ func main() {
 				admin.GET("/config", adminGetConfig)
 				admin.PUT("/config", adminUpdateConfig)
 			}
-			
+
 			auth.POST("/blogs/generate", generateBlog)
 			auth.POST("/blogs", publishBlog)
 			auth.POST("/blogs/:id/share", shareBlog) // External Social Share
@@ -144,7 +146,7 @@ func main() {
 			auth.POST("/comments", addComment)
 			auth.POST("/upload", uploadFile)
 			auth.POST("/categories", createCategory) // 管理分类
-			auth.POST("/tags", createTag)             // 管理标签
+			auth.POST("/tags", createTag)            // 管理标签
 		}
 	}
 
@@ -263,7 +265,7 @@ func login(ctx context.Context, c *app.RequestContext) {
 func listBlogs(ctx context.Context, c *app.RequestContext) {
 	blogs := []Blog{}
 	query := DB.Preload("Author").Preload("Category").Preload("Tags")
-	
+
 	// 支持按分类过滤
 	if catID := c.Query("category_id"); catID != "" {
 		query = query.Where("category_id = ?", catID)
@@ -289,16 +291,16 @@ func getBlogDetail(ctx context.Context, c *app.RequestContext) {
 
 func publishBlog(ctx context.Context, c *app.RequestContext) {
 	userID := c.GetUint("user_id")
-	
+
 	var req struct {
-		Title      string `json:"title"`
-		Content    string `json:"content"`
-		ImageURL   string `json:"image_url"`
-		VideoURL   string `json:"video_url"`
-		CategoryID uint   `json:"category_id"`
+		Title      string   `json:"title"`
+		Content    string   `json:"content"`
+		ImageURL   string   `json:"image_url"`
+		VideoURL   string   `json:"video_url"`
+		CategoryID uint     `json:"category_id"`
 		TagNames   []string `json:"tag_names"`
 	}
-	
+
 	if err := c.BindAndValidate(&req); err != nil {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "无效参数"})
 		return
@@ -324,10 +326,10 @@ func publishBlog(ctx context.Context, c *app.RequestContext) {
 
 	DB.Create(&blog)
 	RDB.Del(ctx, BLOG_CACHE_KEY)
-	
+
 	// 发放奖励
 	go DistributeRewards(userID, "POST")
-	
+
 	c.JSON(http.StatusOK, blog)
 }
 
@@ -411,7 +413,7 @@ func generateBlog(ctx context.Context, c *app.RequestContext) {
 func updateBlog(ctx context.Context, c *app.RequestContext) {
 	id := c.Param("id")
 	userID := c.GetUint("user_id")
-	
+
 	var currentUser User
 	DB.First(&currentUser, userID)
 
@@ -440,7 +442,7 @@ func updateBlog(ctx context.Context, c *app.RequestContext) {
 		"video_url":   req.VideoURL,
 		"category_id": req.CategoryID,
 	})
-	
+
 	// 处理标签更新 (多对多)
 	if len(req.Tags) > 0 {
 		DB.Model(&blog).Association("Tags").Replace(req.Tags)
@@ -478,10 +480,10 @@ func addComment(ctx context.Context, c *app.RequestContext) {
 	c.BindAndValidate(&comment)
 	comment.UserID = userID
 	DB.Create(&comment)
-	
+
 	// 发放评论奖励
 	go DistributeRewards(userID, "COMMENT")
-	
+
 	c.JSON(http.StatusOK, comment)
 }
 
@@ -489,7 +491,7 @@ func addComment(ctx context.Context, c *app.RequestContext) {
 func uploadFile(ctx context.Context, c *app.RequestContext) {
 	userID := c.GetUint("user_id")
 	fileHeader, _ := c.FormFile("file")
-	
+
 	ext := filepath.Ext(fileHeader.Filename)
 	newFileName := uuid.New().String() + ext
 	savePath := filepath.Join("uploads", newFileName)
@@ -509,6 +511,7 @@ func uploadFile(ctx context.Context, c *app.RequestContext) {
 
 	c.JSON(http.StatusOK, media)
 }
+
 // 用户个人资料管理
 func getUserProfile(ctx context.Context, c *app.RequestContext) {
 	userID := c.GetUint("user_id")
@@ -534,7 +537,7 @@ func updateUserProfile(ctx context.Context, c *app.RequestContext) {
 
 	var user User
 	DB.First(&user, userID)
-	
+
 	if req.Username != "" {
 		user.Username = req.Username
 	}
@@ -617,7 +620,7 @@ func getRewardLogs(ctx context.Context, c *app.RequestContext) {
 func shareBlog(ctx context.Context, c *app.RequestContext) {
 	userID := c.GetUint("user_id")
 	blogID := c.Param("id")
-	
+
 	var blog Blog
 	if err := DB.First(&blog, blogID).Error; err != nil {
 		c.JSON(http.StatusNotFound, utils.H{"error": "文章未找到"})
@@ -626,14 +629,21 @@ func shareBlog(ctx context.Context, c *app.RequestContext) {
 
 	// 增加分享计数并同步更新
 	DB.Model(&blog).Update("share_count", gorm.Expr("share_count + 1"))
-	
+
 	// 发放分享奖励 (复用 FORWARD 奖励配置)
 	go DistributeRewards(userID, "FORWARD")
-	
+
 	c.JSON(http.StatusOK, utils.H{
-		"message": "分享成功，奖励已发放",
+		"message":     "分享成功，奖励已发放",
 		"share_count": blog.ShareCount + 1,
 	})
+}
+
+// 排行榜逻辑 (排除 admin 用户)
+func getLeaderboard(ctx context.Context, c *app.RequestContext) {
+	users := []User{}
+	DB.Where("role != ?", "admin").Order("blog_balance desc").Limit(100).Find(&users)
+	c.JSON(http.StatusOK, users)
 }
 
 // Admin 面板逻辑
