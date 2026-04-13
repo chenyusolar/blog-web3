@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useAuthStore } from '../stores/auth'
-import { Wallet, Gift, Copy, CheckCircle2, TrendingUp, Loader2 } from 'lucide-vue-next'
+import { Wallet, Gift, Copy, CheckCircle2, TrendingUp, Loader2, CreditCard, Wallet as WalletIcon, DollarSign } from 'lucide-vue-next'
+import axios from 'axios'
 
 interface RewardLog {
   id: number
@@ -15,6 +16,14 @@ const wallet = ref({ address: '', balance: 0, referral_code: '' })
 const rewards = ref<RewardLog[]>([])
 const loading = ref(true)
 const copied = ref(false)
+
+const buyAmount = ref<number | null>(null)
+const buyLoading = ref(false)
+const selectedMethod = ref('')
+
+const blogToReceive = computed(() => {
+  return buyAmount.value ? buyAmount.value * 10 : 0
+})
 
 onMounted(async () => {
   try {
@@ -33,6 +42,28 @@ const copyToClipboard = (text: string) => {
   navigator.clipboard.writeText(text)
   copied.value = true
   setTimeout(() => copied.value = false, 2000)
+}
+
+const handleBuy = async (method: string) => {
+  if (!buyAmount.value || buyAmount.value <= 0) return
+  selectedMethod.value = method
+  buyLoading.value = true
+  try {
+    await axios.post('http://localhost:8888/api/v1/user/buy', {
+      amount_usd: buyAmount.value,
+      payment_method: method
+    }, {
+      headers: { Authorization: `Bearer ${auth.token}` }
+    })
+    wallet.value.balance += blogToReceive.value
+    alert(`成功购买 ${blogToReceive.value} BLOG 代币！`)
+    buyAmount.value = null
+  } catch (err) {
+    alert('购买失败')
+  } finally {
+    buyLoading.value = false
+    selectedMethod.value = ''
+  }
 }
 </script>
 
@@ -95,6 +126,85 @@ const copyToClipboard = (text: string) => {
                 <button @click="copyToClipboard(wallet?.referral_code || '')" class="text-slate-400 hover:text-indigo-600 transition">
                   <Copy class="w-5 h-5" />
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Buy BLOG Section -->
+      <div class="bg-white rounded-[40px] border border-slate-100 shadow-xl shadow-slate-100 overflow-hidden mb-10">
+        <div class="p-8 border-b border-slate-50 flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <DollarSign class="w-5 h-5" />
+          </div>
+          <div>
+            <h3 class="text-xl font-bold text-slate-900">购买 BLOG 代币</h3>
+            <p class="text-slate-500 text-sm font-medium">1 USD = 10 BLOG</p>
+          </div>
+        </div>
+        
+        <div class="p-8">
+          <div class="flex flex-col md:flex-row gap-8 items-start">
+            <div class="flex-grow space-y-6 w-full">
+              <div class="flex flex-col gap-2">
+                <label class="text-xs font-bold text-slate-500 uppercase ml-1">支付金额 (USD)</label>
+                <div class="relative">
+                  <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                  <input 
+                    v-model.number="buyAmount"
+                    type="number" 
+                    min="1"
+                    placeholder="输入金额..." 
+                    class="w-full pl-8 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-600/20 focus:bg-white transition-all font-medium text-slate-900 outline-none text-sm"
+                  />
+                </div>
+              </div>
+
+              <div v-if="blogToReceive > 0" class="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center justify-between">
+                <span class="text-sm font-bold text-indigo-800">您将获得</span>
+                <span class="text-2xl font-black text-indigo-600">{{ blogToReceive }} BLOG</span>
+              </div>
+
+              <div class="flex flex-col gap-3">
+                <p class="text-xs font-bold text-slate-500 uppercase ml-1">选择支付方式</p>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <button 
+                    @click="handleBuy('stripe')"
+                    :disabled="buyLoading || !buyAmount"
+                    class="flex items-center justify-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:border-indigo-500 hover:text-indigo-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <CreditCard class="w-4 h-4" /> Stripe
+                  </button>
+                  <button 
+                    @click="handleBuy('paypal')"
+                    :disabled="buyLoading || !buyAmount"
+                    class="flex items-center justify-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:border-indigo-500 hover:text-indigo-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <CreditCard class="w-4 h-4" /> PayPal
+                  </button>
+                  <button 
+                    @click="handleBuy('wise')"
+                    :disabled="buyLoading || !buyAmount"
+                    class="flex items-center justify-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:border-indigo-500 hover:text-indigo-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <CreditCard class="w-4 h-4" /> Wise
+                  </button>
+                  <button 
+                    @click="handleBuy('metamask')"
+                    :disabled="buyLoading || !buyAmount"
+                    class="flex items-center justify-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:border-indigo-500 hover:text-indigo-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <WalletIcon class="w-4 h-4" /> MetaMask
+                  </button>
+                  <button 
+                    @click="handleBuy('okx')"
+                    :disabled="buyLoading || !buyAmount"
+                    class="flex items-center justify-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:border-indigo-500 hover:text-indigo-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <WalletIcon class="w-4 h-4" /> OKX
+                  </button>
+                </div>
               </div>
             </div>
           </div>

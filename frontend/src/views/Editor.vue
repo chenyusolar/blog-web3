@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { useRouter, useRoute } from 'vue-router'
 import { 
-  Sparkles, Send, Tag as TagIcon, LayoutGrid, FileImage, Save,
+  Sparkles, Send, Tag as TagIcon, LayoutGrid, FileImage, Save, Crown,
   Bold, Italic, List, ListOrdered, Quote, Heading1, Heading2, Code, Undo, Redo, 
   Strikethrough, Image as ImageIcon, Youtube as YoutubeIcon,
   Table as TableIcon, MinusSquare, Columns, Rows, Trash2, Paperclip, Link as LinkIcon
@@ -70,7 +70,8 @@ const blogForm = ref({
   content: '',
   image_url: '',
   category_id: null as number | null,
-  tag_names: [] as string[]
+  tag_names: [] as string[],
+  is_vip: false
 })
 
 const tagInput = ref('')
@@ -152,7 +153,8 @@ const fetchBlogData = async (id: string) => {
       content: data.content,
       image_url: data.image_url,
       category_id: data.category_id,
-      tag_names: data.tags?.map((t: any) => t.name) || []
+      tag_names: data.tags?.map((t: any) => t.name) || [],
+      is_vip: data.is_vip || false
     }
     // Update Tiptap content
     if (editor.value) {
@@ -457,6 +459,19 @@ onMounted(async () => {
           <div v-if="blogForm.image_url" class="rounded-2xl overflow-hidden border border-slate-100 aspect-video">
             <img :src="blogForm.image_url" class="w-full h-full object-cover" />
           </div>
+        </div>
+
+        <!-- VIP Toggle -->
+        <div class="flex flex-col gap-4">
+          <h4 class="font-bold text-sm text-slate-800 flex items-center gap-2">
+            <Crown class="w-4 h-4 text-amber-500" />
+            会员专享设置
+          </h4>
+          <label class="flex items-center justify-between p-4 bg-amber-50 border border-amber-100 rounded-2xl cursor-pointer hover:bg-amber-100 transition">
+            <span class="text-sm font-medium text-amber-800">设置为会员专享文章</span>
+            <input type="checkbox" v-model="blogForm.is_vip" class="w-5 h-5 text-amber-500 rounded focus:ring-amber-500" />
+          </label>
+          <p class="text-[10px] text-slate-400">开启后，非会员用户将无法查看完整内容</p>
         </div>
 
         <button 

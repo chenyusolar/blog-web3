@@ -43,6 +43,10 @@ const routes = [
     component: () => import('../views/Leaderboard.vue')
   },
   { 
+    path: '/vip', 
+    component: () => import('../views/VipZone.vue')
+  },
+  { 
     path: '/admin', 
     component: () => import('../views/AdminPanel.vue'),
     beforeEnter: (_to: RouteLocationNormalized, _from: RouteLocationNormalized, next: NavigationGuardNext) => {

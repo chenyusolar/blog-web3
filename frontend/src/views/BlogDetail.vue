@@ -4,7 +4,7 @@ import axios from 'axios'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { 
-  Calendar, Tag, MessageCircle, Send, Share2, CornerUpRight 
+  Calendar, Tag, MessageCircle, Send, Share2, CornerUpRight, Crown
 } from 'lucide-vue-next'
 import ShareModal from '../components/ShareModal.vue'
 
@@ -27,6 +27,7 @@ interface Blog {
   category: { name: string }
   tags: { id: number, name: string }[]
   is_forward: boolean
+  is_vip: boolean
   original_blog: Blog | null
 }
 
@@ -36,12 +37,18 @@ const auth = useAuthStore()
 const blog = ref<Blog | null>(null)
 const comments = ref<Comment[]>([])
 const commentContent = ref('')
+const isLocked = ref(false)
 
 const fetchBlog = async () => {
   try {
-    const res = await axios.get(`http://localhost:8888/api/v1/blogs/${route.params.id}`)
+    const config: any = {}
+    if (auth.token) {
+      config.headers = { Authorization: `Bearer ${auth.token}` }
+    }
+    const res = await axios.get(`http://localhost:8888/api/v1/blogs/${route.params.id}`, config)
     blog.value = res.data.blog
     comments.value = res.data.comments
+    isLocked.value = res.data.is_locked
   } catch (err) {
     console.error('Failed to fetch blog:', err)
   }
@@ -128,8 +135,18 @@ onMounted(fetchBlog)
       <div class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
     </div>
 
+    <!-- VIP Locked Message -->
+    <div v-if="isLocked" class="bg-amber-50 border border-amber-200 rounded-3xl p-12 text-center mb-12">
+      <Crown class="w-12 h-12 text-amber-500 mx-auto mb-4" />
+      <h3 class="text-xl font-bold text-amber-800 mb-2">会员专享内容</h3>
+      <p class="text-amber-600 mb-6">升级会员后即可解锁完整文章</p>
+      <router-link to="/wallet" class="inline-flex items-center gap-2 px-6 py-3 bg-amber-500 text-white font-bold rounded-2xl hover:bg-amber-600 transition shadow-lg">
+        <Crown class="w-4 h-4" /> 升级会员
+      </router-link>
+    </div>
+
     <!-- Content -->
-    <div class="prose prose-indigo prose-lg max-w-none text-slate-700 mb-20" v-html="blog.content">
+    <div v-else class="prose prose-indigo prose-lg max-w-none text-slate-700 mb-20" v-html="blog.content">
     </div>
 
     <!-- Tags -->
